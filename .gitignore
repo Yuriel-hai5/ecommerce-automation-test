@@ -45,3 +45,6 @@ Thumbs.db
 # JMeter
 *.jtl
 jmeter_dashboard/
+
+# 私密文件（面试复习等）
+INTERVIEW_PREP.md
