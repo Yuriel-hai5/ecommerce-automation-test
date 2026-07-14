@@ -2,7 +2,7 @@
 接口测试Fixture配置
 - 提供APIClient实例
 - 提供已登录的用户session
-- 测试数据初始化与清理
+- 测试数据初始化与清理（订单/购物车/库存回滚）
 """
 import pytest
 import sys
@@ -22,7 +22,7 @@ def api_client():
 
 @pytest.fixture(scope="function")
 def registered_user(api_client):
-    """注册一个新用户，测试结束后清理"""
+    """注册一个新用户，测试结束后彻底清理"""
     import time
     username = f"testuser_{int(time.time() * 1000)}"
     password = "Test1234"
@@ -30,7 +30,21 @@ def registered_user(api_client):
     assert resp.status_code == 200
     user_id = resp.json()["data"]["userId"]
     yield {"username": username, "password": password, "userId": user_id}
-    # 清理
+    # 彻底清理：取消订单回滚库存 -> 删订单 -> 清购物车 -> 删用户
+    # 1. 回滚该用户的所有订单占用的库存
+    orders_to_remove = []
+    for oid, order in list(db["orders"].items()):
+        if order["userId"] == user_id:
+            if order["status"] in ["待支付", "已支付", "支付失败"]:
+                for item in order["items"]:
+                    db["products"][item["productId"]]["stock"] += item["quantity"]
+            orders_to_remove.append(oid)
+    for oid in orders_to_remove:
+        del db["orders"][oid]
+    # 2. 清空购物车
+    if user_id in db["carts"]:
+        db["carts"][user_id] = []
+    # 3. 删除用户
     if user_id in db["users"]:
         del db["users"][user_id]
 
@@ -58,5 +72,4 @@ def sample_cart(auth_client):
     auth_client.post("/api/cart/add", json_data={"productId": "1001", "quantity": 1})
     auth_client.post("/api/cart/add", json_data={"productId": "1003", "quantity": 2})
     yield auth_client
-    # 清空购物车
-    auth_client.post("/api/cart/clear")
+    # 由 registered_user 的 teardown 统一清理购物车和库存

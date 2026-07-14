@@ -272,5 +272,19 @@ def pay_callback():
 def coupon_list():
     return jsonify({"code": 200, "data": list(db["coupons"].values())}), 200
 
+
+# ========== 测试辅助接口（仅限测试环境） ==========
+@app.route("/api/test/set-stock", methods=["POST"])
+def test_set_stock():
+    """测试专用：修改商品库存"""
+    data = request.get_json() or {}
+    product_id = data.get("productId")
+    stock = data.get("stock")
+    if product_id not in db["products"]:
+        return jsonify({"code": 404, "message": "商品不存在"}), 404
+    db["products"][product_id]["stock"] = stock
+    return jsonify({"code": 200, "message": "库存已更新", "data": {"productId": product_id, "stock": stock}}), 200
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

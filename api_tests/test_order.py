@@ -24,11 +24,14 @@ class TestOrderCreate:
     @allure.title("创建订单（使用固定金额优惠券）")
     @pytest.mark.order
     def test_order_create_with_fixed_coupon(self, auth_client, sample_cart):
+        # 先记录购物车总价（创建订单后购物车会被清空）
+        cart_items = auth_client.get("/api/cart/list").json()["data"]["items"]
+        total_before = sum(i["price"] * i["quantity"] for i in cart_items)
         resp = auth_client.post("/api/order/create", json_data={"address": "上海", "couponCode": "SAVE100"})
         auth_client.assert_response(resp, expected_status=200)
         data = resp.json()["data"]
-        # 优惠券减100
-        assert data["finalAmount"] < sum(i["price"] * i["quantity"] for i in sample_cart.get("/api/cart/list").json()["data"]["items"])
+        # 优惠券减100，且满足满500门槛
+        assert data["finalAmount"] == total_before - 100
 
     @allure.title("创建订单（使用百分比优惠券）")
     @pytest.mark.order
@@ -42,32 +45,38 @@ class TestOrderCreate:
     @pytest.mark.order
     def test_order_create_empty_cart(self, auth_client):
         auth_client.post("/api/cart/clear")
-        resp = auth_client.post("/api/order/create")
+        resp = auth_client.post("/api/order/create", json_data={})
         auth_client.assert_response(resp, expected_status=400)
         assert "购物车为空" in resp.json()["message"]
 
     @allure.title("未登录创建订单")
     @pytest.mark.order
     def test_order_create_no_auth(self, api_client):
-        resp = api_client.post("/api/order/create")
+        resp = api_client.post("/api/order/create", json_data={})
         api_client.assert_response(resp, expected_status=401)
 
     @allure.title("创建订单后购物车被清空")
     @pytest.mark.smoke
     @pytest.mark.order
     def test_order_create_cart_cleared(self, auth_client, sample_cart):
-        auth_client.post("/api/order/create")
+        auth_client.post("/api/order/create", json_data={})
         resp = auth_client.get("/api/cart/list")
         assert resp.json()["data"]["items"] == []
 
     @allure.title("库存不足时创建订单失败")
     @pytest.mark.order
     def test_order_create_stock_insufficient(self, auth_client):
-        # 先把库存占完（1003库存100，1004库存0）
-        auth_client.post("/api/cart/add", json_data={"productId": "1004", "quantity": 1})
-        resp = auth_client.post("/api/order/create")
-        auth_client.assert_response(resp, expected_status=400)
-        assert "库存不足" in resp.json()["message"]
+        # 加购一个库存充足的商品
+        auth_client.post("/api/cart/add", json_data={"productId": "1001", "quantity": 1})
+        # 模拟并发场景：通过测试专用接口将商品库存设为0（测试订单阶段的库存校验）
+        auth_client.post("/api/test/set-stock", json_data={"productId": "1001", "stock": 0})
+        try:
+            resp = auth_client.post("/api/order/create", json_data={})
+            auth_client.assert_response(resp, expected_status=400)
+            assert "库存不足" in resp.json()["message"]
+        finally:
+            # 恢复库存，避免影响其他测试（由conftest统一清理，但此处显式恢复更保险）
+            auth_client.post("/api/test/set-stock", json_data={"productId": "1001", "stock": 50})
 
 
 @allure.feature("订单模块")
@@ -78,7 +87,7 @@ class TestOrderDetail:
     @pytest.mark.smoke
     @pytest.mark.order
     def test_order_detail_success(self, auth_client, sample_cart):
-        create_resp = auth_client.post("/api/order/create").json()["data"]
+        create_resp = auth_client.post("/api/order/create", json_data={}).json()["data"]
         order_id = create_resp["orderId"]
         resp = auth_client.get(f"/api/order/{order_id}")
         auth_client.assert_response(resp, expected_status=200, expected_keys=["data"])
@@ -101,7 +110,7 @@ class TestOrderCancel:
     @pytest.mark.smoke
     @pytest.mark.order
     def test_order_cancel_success(self, auth_client, sample_cart):
-        create_resp = auth_client.post("/api/order/create").json()["data"]
+        create_resp = auth_client.post("/api/order/create", json_data={}).json()["data"]
         order_id = create_resp["orderId"]
         # 记录取消前库存
         product = auth_client.get("/api/product/1001").json()["data"]
@@ -121,7 +130,7 @@ class TestOrderCancel:
     @allure.title("取消已支付订单失败")
     @pytest.mark.order
     def test_order_cancel_paid_order(self, auth_client, sample_cart):
-        create_resp = auth_client.post("/api/order/create").json()["data"]
+        create_resp = auth_client.post("/api/order/create", json_data={}).json()["data"]
         order_id = create_resp["orderId"]
         # 先支付
         auth_client.post("/api/pay", json_data={"orderId": order_id, "payMethod": "wechat"})

@@ -99,7 +99,7 @@ pip install -r requirements.txt
 
 ### 5.2 启动Mock服务
 ```bash
-python utils/mock_server.py
+python -m utils.mock_server
 ```
 服务启动后访问：`http://127.0.0.1:5000`
 

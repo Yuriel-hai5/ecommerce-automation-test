@@ -14,7 +14,7 @@ class TestPayOrder:
     @pytest.mark.smoke
     @pytest.mark.pay
     def test_pay_success(self, auth_client, sample_cart):
-        order = auth_client.post("/api/order/create").json()["data"]
+        order = auth_client.post("/api/order/create", json_data={}).json()["data"]
         resp = auth_client.post("/api/pay", json_data={
             "orderId": order["orderId"],
             "payMethod": "alipay"
@@ -26,7 +26,7 @@ class TestPayOrder:
     @allure.title("微信支付")
     @pytest.mark.pay
     def test_pay_wechat(self, auth_client, sample_cart):
-        order = auth_client.post("/api/order/create").json()["data"]
+        order = auth_client.post("/api/order/create", json_data={}).json()["data"]
         resp = auth_client.post("/api/pay", json_data={
             "orderId": order["orderId"],
             "payMethod": "wechat"
@@ -37,7 +37,7 @@ class TestPayOrder:
     @allure.title("重复支付")
     @pytest.mark.pay
     def test_pay_duplicate(self, auth_client, sample_cart):
-        order = auth_client.post("/api/order/create").json()["data"]
+        order = auth_client.post("/api/order/create", json_data={}).json()["data"]
         auth_client.post("/api/pay", json_data={"orderId": order["orderId"]})
         resp = auth_client.post("/api/pay", json_data={"orderId": order["orderId"]})
         auth_client.assert_response(resp, expected_status=400)
@@ -64,7 +64,7 @@ class TestPayCallback:
     @pytest.mark.smoke
     @pytest.mark.pay
     def test_callback_success(self, auth_client, sample_cart):
-        order = auth_client.post("/api/order/create").json()["data"]
+        order = auth_client.post("/api/order/create", json_data={}).json()["data"]
         resp = auth_client.post("/api/pay/callback", json_data={
             "orderId": order["orderId"],
             "status": "success",
@@ -78,7 +78,7 @@ class TestPayCallback:
     @allure.title("支付失败回调")
     @pytest.mark.pay
     def test_callback_fail(self, auth_client, sample_cart):
-        order = auth_client.post("/api/order/create").json()["data"]
+        order = auth_client.post("/api/order/create", json_data={}).json()["data"]
         # 记录库存
         stock_before = auth_client.get("/api/product/1001").json()["data"]["stock"]
 
@@ -97,7 +97,7 @@ class TestPayCallback:
     @allure.title("回调签名校验失败")
     @pytest.mark.pay
     def test_callback_invalid_sign(self, auth_client, sample_cart):
-        order = auth_client.post("/api/order/create").json()["data"]
+        order = auth_client.post("/api/order/create", json_data={}).json()["data"]
         resp = auth_client.post("/api/pay/callback", json_data={
             "orderId": order["orderId"],
             "status": "success"
