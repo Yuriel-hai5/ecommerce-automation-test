@@ -5,6 +5,11 @@ UI全链路流程测试
 """
 import pytest
 import allure
+import sys
+import os
+
+# 确保pages包可被导入
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pages.login_page import LoginPage
 from pages.product_page import ProductPage
 from pages.cart_page import CartPage
